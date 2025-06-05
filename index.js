@@ -63,7 +63,7 @@ function loadProxyConfig() {
       .map(mapping => ({
         context: config.getIfPresent(`proxy.mapping.${mapping}.context`) || mapping,
         server: config.getIfPresent(`proxy.mapping.${mapping}.server`),
-        targetContext: config.getIfPresent(`proxy.mapping.${mapping}.target-context`) || mapping,
+        target: config.getIfPresent(`proxy.mapping.${mapping}.target-context`) || mapping,
       }))
       .filter(m => m.server);
   }
@@ -130,11 +130,11 @@ module.exports = {
     proxyFlags.on.error = error || proxyFlags.on.error;
 
     const router = express.Router();
-    loadProxyConfig().mappings.forEach(({ context, server, targetContext }) => {
+    loadProxyConfig().mappings.forEach(({ context, server, target }) => {
       if (!context || !server) return;
       const pathContext = `/${context}/`;
-      const pathTarget = `/${targetContext || context}`;
-      console.log('########## proxy mapping', { context, server, targetContext: pathTarget });
+      const pathTarget = `/${target || context}`;
+      console.log('########## proxy mapping', { context, server, target: pathTarget });
       router.use(pathContext, module.exports.forward(server, { path: pathTarget }));
     });
 
@@ -142,11 +142,11 @@ module.exports = {
     return router;
   },
   setup(app) {
-    loadProxyConfig().mappings.map(({ context, server, targetContext }) => {
+    loadProxyConfig().mappings.map(({ context, server, target }) => {
       if (!context || !server) return;
       const pathContext = `/${context}/`;
-      const pathTarget = `/${targetContext || context}`;
-      console.log('########## proxy mapping', { context, server, targetContext: pathTarget });
+      const pathTarget = `/${target || context}`;
+      console.log('########## proxy mapping', { context, server, target: pathTarget });
       router.use(pathContext, module.exports.forward(server, { path: pathTarget }));
     });
   },
