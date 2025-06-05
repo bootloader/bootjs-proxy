@@ -12,6 +12,12 @@ var agent = new httpNative.Agent({ maxSockets: Number.MAX_VALUE });
 const proxyFlags = {
   debug: false,
   initd: false,
+  on: {
+    request() {},
+    response() {},
+    error() {},
+    end() {},
+  },
 };
 
 let proxyConfig = null;
@@ -72,6 +78,7 @@ const proxy = httpProxy.createProxyServer({
 proxy.on('error', function (err, req, res) {
   proxyFlags.debug && console.log('proxyError', err);
   res.end('Something went wrong. And we are reporting a custom error message.');
+  proxyFlags.on.error({ err, request: req, response: res });
 });
 
 proxy.on('proxyReq', function (proxyReq, req, res, options) {
@@ -80,14 +87,17 @@ proxy.on('proxyReq', function (proxyReq, req, res, options) {
   for (let key in httpProxyStore.headers) {
     proxyReq.setHeader(key, httpProxyStore.headers[key]);
   }
+  proxyFlags.on.request({ requestProxy: proxyReq, request: req, response: res, options });
 });
 
 proxy.on('proxyRes', function (proxyRes, req, res) {
   proxyFlags.debug && console.log('proxyRes');
+  proxyFlags.on.response({ responseProxy: proxyRes, request: req, response: res });
 });
 
 proxy.on('end', function (req, res, proxyRes) {
   proxyFlags.debug && console.log('proxyEnd');
+  proxyFlags.on.response({ responseProxy: proxyRes, request: req, response: res });
 });
 
 function requestHeaders() {
@@ -110,7 +120,12 @@ function init() {
 }
 
 module.exports = {
-  router: ({ express }) => {
+  router: ({ express, request, response, end, error }) => {
+    proxyFlags.on.request = request || proxyFlags.on.request;
+    proxyFlags.on.response = response || proxyFlags.on.response;
+    proxyFlags.on.end = end || proxyFlags.on.end;
+    proxyFlags.on.error = error || proxyFlags.on.error;
+
     const router = express.Router();
     loadProxyConfig().mappings.forEach(({ context, server, targetContext }) => {
       if (!context || !server) return;
