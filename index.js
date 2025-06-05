@@ -17,6 +17,9 @@ const proxyFlags = {
     response() {},
     error() {},
     end() {},
+    ready() {
+      console.log('ProxyService is ready');
+    },
   },
 };
 
@@ -134,6 +137,8 @@ module.exports = {
       console.log('########## proxy mapping', { context, server, targetContext: pathTarget });
       router.use(pathContext, module.exports.forward(server, { path: pathTarget }));
     });
+
+    proxyFlags.on.ready({ appendRequestHeader });
     return router;
   },
   setup(app) {

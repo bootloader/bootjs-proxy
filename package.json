@@ -10,7 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "@bootloader/config": "^1.4.2",
-    "@bootloader/utils": "^1.0.20",
+    "@bootloader/utils": "^1.0.21",
     "http-proxy": "^1.18.1"
   }
 }
