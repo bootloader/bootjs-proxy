@@ -4,6 +4,13 @@ const config = require('@bootloader/config');
 const pathy = require('@bootloader/utils/pathy');
 const httpProxy = require('http-proxy');
 const httpNative = require('http');
+
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
+
+
 //const express = require("express");
 const log4js = require("@bootloader/log4js");
 var logger = log4js.getLogger("proxy");
@@ -82,13 +89,13 @@ const proxy = httpProxy.createProxyServer({
 });
 
 proxy.on('error', function (err, req, res) {
-  proxyFlags.debug && console.log('proxyError', err);
+  logger.debug('proxyError', err);
   res.end('Something went wrong. And we are reporting a custom error message.');
   proxyFlags.on.error({ err, request: req, response: res });
 });
 
 proxy.on('proxyReq', function (proxyReq, req, res, options) {
-  proxyFlags.debug && console.log('proxyReq');
+  logger.debug('proxyReq');
 
   for (let key in httpProxyStore.headers) {
     proxyReq.setHeader(key, httpProxyStore.headers[key]);
@@ -97,12 +104,12 @@ proxy.on('proxyReq', function (proxyReq, req, res, options) {
 });
 
 proxy.on('proxyRes', function (proxyRes, req, res) {
-  proxyFlags.debug && console.log('proxyRes');
+  logger.debug('proxyRes');
   proxyFlags.on.response({ responseProxy: proxyRes, request: req, response: res });
 });
 
 proxy.on('end', function (req, res, proxyRes) {
-  proxyFlags.debug && console.log('proxyEnd');
+  logger.debug('proxyEnd');
   proxyFlags.on.response({ responseProxy: proxyRes, request: req, response: res });
 });
 
@@ -126,6 +133,32 @@ function init() {
 }
 
 module.exports = {
+
+  beforeProxy(apiRouter){
+    // Middleware setup
+      apiRouter.use(cors());
+      apiRouter.use(function (req, res, next) {
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader('Access-Control-Allow-Methods', '*');
+          res.setHeader("Access-Control-Allow-Headers", "*");
+          next();
+      });
+      apiRouter.options('*', cors())
+      var customParser = bodyParser.json({type: function(req) {
+          console.log("customParser:bodyParser.json",req.headers['content-type'])
+          if (req.headers['content-type'] === ""){
+              return req.headers['content-type'] = 'application/json';
+          }
+          else if (typeof req.headers['content-type'] === 'undefined'){
+              return req.headers['content-type'] = 'application/json';
+          } else {
+              return req.headers['content-type'] = 'application/json';
+          }
+      }});
+      apiRouter.use(cookieParser());
+      return {bodyParser,customParser}
+  },
+
   router: ({ express, request, response, end, error }) => {
     proxyFlags.on.request = request || proxyFlags.on.request;
     proxyFlags.on.response = response || proxyFlags.on.response;
@@ -133,6 +166,9 @@ module.exports = {
     proxyFlags.on.error = error || proxyFlags.on.error;
 
     const router = express.Router();
+
+    let { bodyParser,customParser } = module.exports.beforeProxy(router);
+
     loadProxyConfig().mappings.forEach(({ context, server, target }) => {
       if (!context || !server) return;
       const pathContext = `/${context}/`;
@@ -141,15 +177,23 @@ module.exports = {
       router.use(pathContext, module.exports.forward(server, { path: pathTarget }));
     });
 
+    module.exports.afterParser(router,{ bodyParser, customParser } );
+
     proxyFlags.on.ready({ appendRequestHeader });
     return router;
+  },
+  afterParser(apiRouter,{bodyParser}){
+      apiRouter.use(bodyParser.urlencoded({limit: '50mb',extended: false}));
+      apiRouter.use(bodyParser.json({limit: '50mb',extended: true}));
+      apiRouter.use(bodyParser.text({limit: '50mb',extended: true}));
+      apiRouter.use(bodyParser.raw({limit: '50mb'}));
   },
   setup(app) {
     loadProxyConfig().mappings.map(({ context, server, target }) => {
       if (!context || !server) return;
       const pathContext = `/${context}/`;
       const pathTarget = `/${target || context}`;
-      console.log('########## proxy mapping', { context, server, target: pathTarget });
+      console.log('########## proxy', { context, server, target: pathTarget });
       router.use(pathContext, module.exports.forward(server, { path: pathTarget }));
     });
   },
@@ -167,8 +211,8 @@ module.exports = {
     let target = (host + '/' + options.path || '').replace(/(\/)\/+/g, '$1').replace(/^http(s?):/, 'http$1:/');
 
     return function (req, res, next) {
-      console.log('########## proxy forward', {
-        from: `${req.protocol}://${req.headers.host}${req.originalUrl}`,
+      logger.debug('########## proxy', {
+        from: `${req.method}:${req.protocol}://${req.headers.host}${req.originalUrl}`,
         to: `${target}${req.url}`,
       });
       proxy.web(
