@@ -5,6 +5,8 @@ const pathy = require('@bootloader/utils/pathy');
 const httpProxy = require('http-proxy');
 const httpNative = require('http');
 //const express = require("express");
+const log4js = require("@bootloader/log4js");
+var logger = log4js.getLogger("proxy");
 
 const httpProxyStore = config.store('http-proxy');
 var agent = new httpNative.Agent({ maxSockets: Number.MAX_VALUE });
@@ -32,13 +34,14 @@ function loadProxyConfig() {
   const filePath = path.resolve(root, 'config/proxy.json');
 
   if (fs.existsSync(filePath)) {
+    logger.info("Loading proxy config:"+filePath)
     const fileData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     proxyConfig = {
       headers: fileData.headers || {},
-      mappings: Object.values(fileData.context || {}),
+      mappings: Object.values(fileData.forward || {}),
     };
   } else {
-    console.warn('Proxy configuration file not found at', filePath);
+    logger.info("Loading proxy config:"+filePath)
     proxyConfig = {
       headers: {},
       mappings: [],
